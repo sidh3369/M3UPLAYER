@@ -15,7 +15,7 @@ app.use(express.static(PUBLIC_DIR));
 
 function loadMedia() {
   try {
-    return JSON.parse(fs.readFileSync(MEDIA_FILE));
+    return JSON.parse(fs.readFileSync(MEDIA_FILE)) || { m3uUrl: '' };
   } catch (e) {
     return { m3uUrl: '' };
   }
@@ -23,7 +23,7 @@ function loadMedia() {
 
 function saveMedia(data) {
   try {
-    fs.writeFileSync(MEDIA_FILE, JSON.stringify(data, null, 2));
+    fs.writeFileSync(MEDIA_FILE, JSON.stringify(data));
   } catch (e) {
     console.error('Error saving media:', e.message);
   }
@@ -34,15 +34,14 @@ async function parseM3U(url) {
     const response = await axios.get(url);
     const lines = response.data.split('\n');
     const streams = [];
-    let currentStream = null;
+    let name = '';
     for (const line of lines) {
       if (line.startsWith('#EXTINF:')) {
-        const nameMatch = line.match(/,(.+)/);
-        currentStream = { name: nameMatch ? nameMatch[1].trim() : 'Unnamed Stream' };
-      } else if (line && !line.startsWith('#') && currentStream) {
-        currentStream.url = line.trim();
-        streams.push(currentStream);
-        currentStream = null;
+        const match = line.match(/,(.+)/);
+        name = match ? match[1].trim() : 'Stream';
+      } else if (line && !line.startsWith('#')) {
+        streams.push({ name, url: line.trim() });
+        name = '';
       }
     }
     return streams;
@@ -56,76 +55,46 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-app.post('/set-m3u', async (req, res) => {
+app.post('/set-m3u', (req, res) => {
   const { m3uUrl } = req.body;
-  if (!m3uUrl) {
-    return res.json({ success: false, error: 'M3U URL required' });
-  }
+  if (!m3uUrl) return res.json({ success: false, error: 'M3U URL required' });
   const media = loadMedia();
   media.m3uUrl = m3uUrl;
   saveMedia(media);
-  console.log('M3U URL saved:', m3uUrl);
   res.json({ success: true, message: 'M3U URL saved' });
 });
 
 app.get('/manifest.json', (req, res) => {
   res.json({
-    id: 'sidh3369.m3uplayer',
+    id: 'sidh3369.simplem3u',
     version: '1.0.0',
-    name: 'M3UPLAYER',
+    name: 'SimpleM3U',
     description: 'Play M3U playlists in Stremio',
-    resources: ['catalog', 'meta', 'stream'],
+    resources: ['catalog', 'stream'],
     types: ['movie'],
     catalogs: [{ type: 'movie', id: 'm3u_catalog' }],
     behaviorHints: {}
   });
 });
 
-app.get('/catalog/:type/:id/:extra?.json', async (req, res) => {
+app.get('/catalog/:type/:id.json', async (req, res) => {
   const media = loadMedia();
-  if (!media.m3uUrl) {
-    return res.json({ metas: [] });
-  }
+  if (!media.m3uUrl) return res.json({ metas: [] });
   res.json({
     metas: [{
       id: 'm3u_playlist',
       name: 'M3U Playlist',
       type: 'movie',
-      poster: 'https://via.placeholder.com/150?text=M3U+Playlist'
+      poster: 'https://via.placeholder.com/150?text=Playlist'
     }]
-  });
-});
-
-app.get('/meta/:type/:id.json', async (req, res) => {
-  const media = loadMedia();
-  if (!media.m3uUrl || req.params.id !== 'm3u_playlist') {
-    return res.json({});
-  }
-  const streams = await parseM3U(media.m3uUrl);
-  res.json({
-    meta: {
-      id: 'm3u_playlist',
-      name: 'M3U Playlist',
-      type: 'movie',
-      poster: 'https://via.placeholder.com/150?text=M3U+Playlist',
-      videos: streams.map((stream, index) => ({
-        id: `m3u_stream_${index}`,
-        title: stream.name,
-        released: new Date().toISOString().split('T')[0],
-        streams: [{ url: stream.url, title: stream.name, behaviorHints: { bingeGroup: 'm3u_playlist' } }]
-      }))
-    }
   });
 });
 
 app.get('/stream/:type/:id.json', async (req, res) => {
   const media = loadMedia();
-  if (!media.m3uUrl) {
-    return res.json({ streams: [] });
-  }
-  const streamId = req.params.id;
+  if (!media.m3uUrl) return res.json({ streams: [] });
   const streams = await parseM3U(media.m3uUrl);
-  const streamIndex = parseInt(streamId.replace('m3u_stream_', ''), 10);
+  const streamIndex = parseInt(req.params.id.replace('m3u_stream_', ''), 10);
   if (streamIndex >= 0 && streamIndex < streams.length) {
     const stream = streams[streamIndex];
     res.json({
@@ -136,10 +105,17 @@ app.get('/stream/:type/:id.json', async (req, res) => {
       }]
     });
   } else {
-    res.json({ streams: [] });
+    res.json({
+      streams: streams.map((stream, index) => ({
+        title: stream.name,
+        url: stream.url,
+        externalUrl: `stremio:///detail/movie/m3u_playlist/m3u_stream_${index}`,
+        behaviorHints: { bingeGroup: 'm3u_playlist' }
+      }))
+    });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ M3UPLAYER running on http://localhost:${PORT}`);
+  console.log(`✅ SimpleM3U running on http://localhost:${PORT}`);
 });

@@ -1,7 +1,7 @@
 {
-  "name": "m3uplayer",
+  "name": "simplem3u",
   "version": "1.0.0",
-  "description": "Stremio addon for M3U playlists",
+  "description": "Simple Stremio M3U playlist addon",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js"

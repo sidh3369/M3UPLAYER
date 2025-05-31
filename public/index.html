@@ -3,23 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M3UPLAYER</title>
+  <title>SimpleM3U</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 2rem; background: #f0f0f0; }
-    .container { max-width: 600px; margin: auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    h1 { text-align: center; }
-    input { width: 100%; padding: 0.5rem; margin: 1rem 0; font-size: 1rem; }
-    button { width: 48%; padding: 0.5rem; margin: 1%; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #0056b3; }
-    p { text-align: center; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f4f4; }
+    .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+    h1 { text-align: center; font-size: 24px; }
+    input { width: 100%; padding: 8px; margin: 10px 0; font-size: 16px; }
+    button { width: 48%; padding: 8px; margin: 1%; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #218838; }
+    #installBtn { background: #007bff; }
+    #installBtn:hover { background: #0056b3; }
+    p { text-align: center; color: #333; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>M3UPLAYER</h1>
+    <h1>SimpleM3U</h1>
     <input type="text" id="m3uUrl" placeholder="Enter M3U Playlist URL" value="https://hr.gogasecurityforce.com/1.m3u">
-    <button onclick="saveM3U()">Save M3U URL</button>
-    <button onclick="installInStremio()">Install in Stremio</button>
+    <button onclick="saveM3U()">Save M3U</button>
+    <button id="installBtn" onclick="installInStremio()">Install in Stremio</button>
     <p id="message"></p>
   </div>
   <script>
@@ -27,7 +29,7 @@
       const m3uUrl = document.getElementById('m3uUrl').value;
       const message = document.getElementById('message');
       if (!m3uUrl) {
-        message.textContent = 'Please enter a valid M3U URL';
+        message.textContent = 'Enter a valid M3U URL';
         return;
       }
       message.textContent = 'Saving...';
@@ -38,15 +40,14 @@
           body: JSON.stringify({ m3uUrl })
         });
         const result = await res.json();
-        message.textContent = result.success ? 'M3U URL saved! Install in Stremio.' : `Error: ${result.error}`;
+        message.textContent = result.success ? 'M3U URL saved!' : `Error: ${result.error}`;
       } catch (e) {
-        message.textContent = 'Server error. Try again.';
+        message.textContent = 'Error saving URL';
       }
     }
 
     function installInStremio() {
-      const manifestUrl = 'stremio://m3uplayer.onrender.com/manifest.json';
-      window.location.href = manifestUrl;
+      window.location.href = 'stremio://boltplaylist.onrender.com/manifest.json';
     }
   </script>
 </body>

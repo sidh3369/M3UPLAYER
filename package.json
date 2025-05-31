@@ -1,0 +1,14 @@
+{
+  "name": "m3uplayer",
+  "version": "1.0.0",
+  "description": "Stremio addon for M3U playlists",
+  "main": "addon.js",
+  "scripts": {
+    "start": "node addon.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "cors": "^2.8.5",
+    "axios": "^1.4.0"
+  }
+}

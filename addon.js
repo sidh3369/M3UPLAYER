@@ -17,6 +17,7 @@ function loadMedia() {
   try {
     return JSON.parse(fs.readFileSync(MEDIA_FILE)) || { m3uUrl: '' };
   } catch (e) {
+    console.error('Error loading media:', e.message);
     return { m3uUrl: '' };
   }
 }
@@ -31,22 +32,26 @@ function saveMedia(data) {
 
 async function parseM3U(url) {
   try {
-    const response = await axios.get(url);
-    const lines = response.data.split('\n');
+    console.log(`Fetching M3U: ${url}`);
+    const response = await axios.get(url, { timeout: 10000 });
+    console.log(`M3U response: ${response.status}`);
+    const lines = response.data.split('\n').map(line => line.trim()).filter(line => line);
     const streams = [];
-    let name = '';
-    for (const line of lines) {
-      if (line.startsWith('#EXTINF:')) {
-        const match = line.match(/,(.+)/);
-        name = match ? match[1].trim() : 'Stream';
-      } else if (line && !line.startsWith('#')) {
-        streams.push({ name, url: line.trim() });
-        name = '';
+    let name = 'Stream';
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('#EXTINF:')) {
+        const match = lines[i].match(/,(.+)/) || lines[i].match(/tvg-name="(.+?)"/);
+        name = match ? match[1].trim() : `Stream ${streams.length + 1}`;
+      } else if (!lines[i].startsWith('#') && lines[i].match(/^https?:\/\//)) {
+        streams.push({ name, url: lines[i] });
+        console.log(`Parsed stream: ${name} - ${lines[i]}`);
+        name = 'Stream';
       }
     }
+    console.log(`Total streams parsed: ${streams.length}`);
     return streams;
   } catch (e) {
-    console.error('Error parsing M3U:', e.message);
+    console.error(`Error parsing M3U ${url}: ${e.message}`);
     return [];
   }
 }
@@ -58,6 +63,7 @@ app.get('/', (req, res) => {
 app.post('/set-m3u', (req, res) => {
   const { m3uUrl } = req.body;
   if (!m3uUrl) return res.json({ success: false, error: 'M3U URL required' });
+  console.log(`Saving M3U URL: ${m3uUrl}`);
   const media = loadMedia();
   media.m3uUrl = m3uUrl;
   saveMedia(media);
@@ -79,6 +85,7 @@ app.get('/manifest.json', (req, res) => {
 
 app.get('/catalog/:type/:id.json', async (req, res) => {
   const media = loadMedia();
+  console.log(`Catalog requested, m3uUrl: ${media.m3uUrl}`);
   if (!media.m3uUrl) return res.json({ metas: [] });
   res.json({
     metas: [{
@@ -92,28 +99,33 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
 
 app.get('/stream/:type/:id.json', async (req, res) => {
   const media = loadMedia();
+  console.log(`Stream requested, id: ${req.params.id}, m3uUrl: ${media.m3uUrl}`);
   if (!media.m3uUrl) return res.json({ streams: [] });
   const streams = await parseM3U(media.m3uUrl);
+  if (req.params.id === 'm3u_playlist') {
+    const streamList = streams.map((stream, index) => ({
+      title: stream.name,
+      url: stream.url,
+      externalUrl: `stremio:///detail/movie/m3u_playlist/m3u_stream_${index}`,
+      behaviorHints: { bingeGroup: 'm3u_playlist' }
+    }));
+    console.log(`Returning ${streamList.length} streams for playlist`);
+    return res.json({ streams: streamList });
+  }
   const streamIndex = parseInt(req.params.id.replace('m3u_stream_', ''), 10);
   if (streamIndex >= 0 && streamIndex < streams.length) {
     const stream = streams[streamIndex];
-    res.json({
+    console.log(`Returning single stream: ${stream.name}`);
+    return res.json({
       streams: [{
         title: stream.name,
         url: stream.url,
         behaviorHints: { bingeGroup: 'm3u_playlist' }
       }]
     });
-  } else {
-    res.json({
-      streams: streams.map((stream, index) => ({
-        title: stream.name,
-        url: stream.url,
-        externalUrl: `stremio:///detail/movie/m3u_playlist/m3u_stream_${index}`,
-        behaviorHints: { bingeGroup: 'm3u_playlist' }
-      }))
-    });
   }
+  console.log('No matching stream found');
+  res.json({ streams: [] });
 });
 
 app.listen(PORT, () => {
